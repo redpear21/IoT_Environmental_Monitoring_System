@@ -1,0 +1,27 @@
+# --- Security ---
+config.h
+.env
+
+# --- Arduino/ESP32 binaries ---
+*.elf
+*.bin
+*.hex
+*.out
+*.map
+
+# --- IDE folders ---
+.vscode/
+.idea/
+.pio/
+build/
+*.pde
+
+# --- Web/Frontend ---
+node_modules/
+dist/
+.vercel
+
+# --- OS rác ---
+.DS_Store
+Thumbs.db
+desktop.ini
