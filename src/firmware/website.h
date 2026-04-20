@@ -1,0 +1,800 @@
+
+#ifndef WEBSITE_H
+#define WEBSITE_H
+
+const char index_html[] PROGMEM = R"====(
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>IoT Environmental Monitoring Dashboard</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(145deg, #e0f2f7 0%, #b2dfdb 100%); color: #004d5a; min-height: 100vh; display: flex; flex-direction: column; }
+        .container { max-width: 1400px; width: 100%; margin: 0 auto; flex: 1; padding: 24px 28px; }
+        
+        .header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 2px solid #80cbc4; gap: 16px; }
+        .title-section { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .logo-header { height: 42px; width: auto; object-fit: contain; }
+        .title-text h1 { font-size: 1.7rem; font-weight: 700; background: linear-gradient(135deg, #00695c, #0277bd); -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: -0.3px; margin: 0; line-height: 1.2; }
+        .title-text p { font-size: 0.8rem; color: #00695c; margin-top: 6px; font-weight: 500; }
+        .status-clock { text-align: right; }
+        
+        /* Language selector */
+        .lang-selector { display: flex; gap: 8px; margin-top: 8px; justify-content: flex-end; }
+        .lang-btn { background: transparent; border: 1px solid #80cbc4; border-radius: 30px; padding: 4px 12px; font-size: 0.7rem; font-weight: 600; color: #00695c; cursor: pointer; transition: all 0.2s; width: auto; }
+        .lang-btn.active { background: #00695c; color: white; border-color: #00695c; }
+        .lang-btn:hover { background: #00695c20; }
+        
+        .system-status { padding: 8px 22px; border-radius: 40px; font-weight: 600; font-size: 0.8rem; background: white; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 2px 8px rgba(0,105,92,0.1); border: 1px solid #80cbc4; }
+        .status-safe { background: #e0f2f1; color: #00695c; border-left: 4px solid #26a69a; }
+        .status-danger { background: #ffebee; color: #c62828; border-left: 4px solid #ef5350; animation: soft-pulse 1.5s infinite; }
+        @keyframes soft-pulse { 0%,100%{opacity:1;} 50%{opacity:0.85; background:#ffcdd2;} }
+        #time-display { font-family: monospace; font-size: 0.8rem; background: #e0f2f1; padding: 6px 16px; border-radius: 30px; margin-top: 8px; color: #00695c; font-weight: 500; display: inline-block; }
+        
+        .tabs { display: flex; gap: 12px; margin-bottom: 28px; border-bottom: 1px solid #80cbc4; padding-bottom: 8px; }
+        .tab-btn { padding: 12px 28px; background: transparent; border: none; border-radius: 40px; font-weight: 700; color: #00695c; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; }
+        .tab-btn:hover { background: rgba(0,105,92,0.1); }
+        .tab-btn.active { background: #00695c; color: white; box-shadow: 0 4px 12px rgba(0,105,92,0.3); }
+        .tab-content { display: none; animation: fadeIn 0.3s ease; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-bottom: 32px; }
+        .card { background: rgba(255,255,255,0.92); border-radius: 28px; padding: 24px 22px; border: 1px solid #b2dfdb; transition: all 0.25s; box-shadow: 0 8px 20px rgba(0,105,92,0.06); }
+        .card:hover { transform: translateY(-3px); box-shadow: 0 16px 28px -8px rgba(0,105,92,0.15); border-color: #80cbc4; }
+        .metric-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .metric-header i { font-size: 1.8rem; opacity: 0.85; }
+        .label { font-size: 0.75rem; text-transform: uppercase; font-weight: 700; letter-spacing: 1.2px; color: #00695c; }
+        .value { font-size: 3.2rem; font-weight: 800; line-height: 1.1; margin: 10px 0 6px; }
+        .unit { font-size: 0.8rem; color: #607d8b; font-weight: 500; margin-top: auto; }
+        
+        .fan-card-content { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; flex-wrap: wrap; gap: 10px; }
+        .fan-icon-wrapper { text-align: center; background: #e0f2f1; border-radius: 50px; padding: 6px 18px; border: 1px solid #80cbc4; }
+        .fan-icon { font-size: 2.5rem; color: #0277bd; display: inline-block; }
+        .fan-spinning { animation: fanRotate 0.55s linear infinite; display: inline-block; }
+        @keyframes fanRotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .fan-status-text { font-size: 0.65rem; font-weight: 700; margin-top: 5px; color: #00695c; }
+        
+        .control-panels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-bottom: 32px; }
+        .glass-card { background: white; border-radius: 28px; padding: 24px 26px; border: 1px solid #b2dfdb; box-shadow: 0 4px 12px rgba(0,0,0,0.04); display: flex; flex-direction: column; }
+        .glass-card h4 { color: #004d5a; font-weight: 700; margin-bottom: 18px; font-size: 1rem; display: flex; align-items: center; gap: 8px; text-align: left; }
+        .param-row { display: flex; gap: 20px; flex-wrap: wrap; margin: 16px 0; }
+        .param-item { flex: 1; min-width: 120px; }
+        .param-item label { font-size: 0.7rem; text-transform: uppercase; color: #607d8b; display: block; margin-bottom: 6px; font-weight: 700; }
+        input { background: #e0f2f1; border: 1px solid #b2dfdb; padding: 12px 14px; border-radius: 20px; color: #004d5a; font-weight: 500; width: 100%; font-size: 0.9rem; }
+        input:focus { outline: none; border-color: #26a69a; box-shadow: 0 0 0 3px #26a69a30; }
+        button { background: linear-gradient(95deg, #00695c, #0277bd); border: none; color: white; font-weight: 600; padding: 12px 20px; border-radius: 40px; cursor: pointer; transition: all 0.2s; width: 100%; font-size: 0.85rem; }
+        button:hover { background: linear-gradient(95deg, #004d40, #01579b); transform: translateY(-1px); box-shadow: 0 6px 14px #00695c40; }
+        .btn-group { display: flex; gap: 12px; margin: 16px 0 12px; }
+        .btn-group button:first-child { background: #26a69a; }
+        .btn-group button:first-child:hover { background: #00897b; }
+        .btn-group button:last-child { background: #ef5350; }
+        .door-indicator { font-size: 1.3rem; font-weight: 700; display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+        #countdown-box { background: #e0f2f1; border-radius: 40px; padding: 10px 14px; text-align: center; font-size: 0.8rem; font-weight: 600; color: #00695c; margin-top: auto; }
+        
+        .system-card { background: white; border-radius: 28px; padding: 24px 26px; border: 1px solid #b2dfdb; box-shadow: 0 4px 12px rgba(0,0,0,0.04); display: flex; flex-direction: column; height: 100%; }
+        .system-card h4 { color: #004d5a; font-weight: 700; margin-bottom: 18px; font-size: 1rem; display: flex; align-items: center; gap: 8px; text-align: left; justify-content: flex-start; }
+        .system-content { display: flex; flex-direction: column; align-items: center; width: 100%; margin-top: auto; padding-top: 20px; }
+        .reboot-btn { background: linear-gradient(95deg, #f57c00, #ef6c00); border: none; color: white; font-weight: 600; padding: 14px 20px; border-radius: 40px; cursor: pointer; transition: all 0.2s; width: 100%; font-size: 0.9rem; }
+        .reboot-btn:hover { background: linear-gradient(95deg, #ef6c00, #e65100); transform: translateY(-1px); box-shadow: 0 6px 14px #f57c0050; }
+        .sys-warning { margin-top: 16px; padding: 10px; background: #fff3e0; border-radius: 16px; font-size: 0.7rem; color: #e65100; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; }
+
+        .realtime-charts { display: flex; flex-direction: column; gap: 24px; margin-bottom: 32px; }
+        .rt-chart-box { background: white; border-radius: 24px; padding: 18px 24px; border: 1px solid #b2dfdb; box-shadow: 0 4px 12px rgba(0,0,0,0.04); }
+        .rt-chart-title { font-size: 0.95rem; font-weight: 700; margin-bottom: 16px; color: #004d5a; display: flex; align-items: center; gap: 10px; }
+        .rt-chart-box canvas { max-height: 260px; width: 100%; }
+        
+        .filter-section { background: white; border-radius: 20px; padding: 16px 24px; margin-bottom: 24px; display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-end; border: 1px solid #b2dfdb; }
+        .filter-group { display: flex; flex-direction: column; gap: 6px; }
+        .filter-group label { font-size: 0.75rem; font-weight: 700; color: #00695c; text-transform: uppercase; }
+        .filter-group input { padding: 10px 16px; border-radius: 14px; background: #f0f8f8; width: 240px; border: 1px solid #b2dfdb; font-size: 0.9rem; }
+        .filter-actions { display: flex; gap: 12px; margin-left: auto; }
+        .btn-filter, .btn-csv { width: auto; padding: 10px 24px; font-size: 0.85rem; }
+        .btn-csv { background: #f57c00; }
+        .btn-csv:hover { background: #ef6c00; }
+        
+        .history-stats { display: flex; gap: 20px; margin-bottom: 24px; }
+        .h-stat { flex: 1; background: #e0f2f1; border-radius: 20px; padding: 16px; text-align: center; border: 1px solid #80cbc4; }
+        .h-stat span { display: block; font-size: 0.65rem; font-weight: 700; color: #00695c; margin-bottom: 6px; text-transform: uppercase; }
+        .h-stat strong { font-size: 1.6rem; color: #004d5a; font-family: monospace; }
+        
+        .history-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px; margin-bottom: 24px; }
+        .history-chart-card { background: white; border-radius: 24px; padding: 20px 24px; border: 1px solid #b2dfdb; box-shadow: 0 4px 12px rgba(0,0,0,0.04); }
+        .history-chart-title { font-size: 0.85rem; font-weight: 700; margin-bottom: 18px; color: #004d5a; display: flex; align-items: center; gap: 10px; border-left: 4px solid; padding-left: 12px; }
+        .history-chart-card canvas { width: 100%; max-height: 280px; }
+        .full-width { grid-column: span 2; }
+        .full-width canvas { max-height: 320px; min-width: 100%; }
+
+        .academic-footer { margin-top: 40px; padding: 18px 28px; background: white; border-radius: 28px; border: 1px solid #b2dfdb; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px; font-size: 0.8rem; }
+        .footer-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .footer-left i { color: #0277bd; font-size: 1.2rem; }
+        .project-link { background: #e0f2f1; padding: 6px 14px; border-radius: 30px; transition: 0.2s; border: 1px solid #80cbc4; display: inline-flex; align-items: center; gap: 8px; }
+        .project-link a { color: #00695c; text-decoration: none; font-weight: 600; font-size: 0.75rem; }
+        .project-link:hover { background: #00695c; }
+        .project-link:hover a { color: white; }
+        .footer-right { color: #607d8b; display: flex; gap: 20px; flex-wrap: wrap; }
+        
+        @media (max-width: 768px) {
+            .container { padding: 12px 16px; }
+            
+            .header { flex-direction: column; align-items: center; text-align: center; gap: 12px; }
+            .title-section { justify-content: center; flex-direction: column; }
+            .title-text h1 { font-size: 1.2rem; }
+            .title-text p { font-size: 0.65rem; }
+            .logo-header { height: 32px; margin-bottom: 4px; }
+            .status-clock { width: 100%; display: flex; flex-direction: column; align-items: center; margin-top: 12px; }
+            .system-status { font-size: 0.7rem; padding: 6px 16px; justify-content: center; }
+            .lang-selector { justify-content: center; margin-top: 6px; }
+            #time-display { font-size: 0.65rem; white-space: normal; text-align: center; margin-top: 6px; }
+            
+            .grid, .control-panels { grid-template-columns: 1fr; gap: 12px; }
+            .history-grid { grid-template-columns: 1fr; gap: 12px; }
+            .full-width { grid-column: span 1; }
+            .filter-section { flex-direction: column; align-items: stretch; }
+            .filter-actions { margin-left: 0; justify-content: flex-start; }
+            .filter-group input { width: 100%; }
+            .history-stats { flex-wrap: wrap; }
+            .h-stat { min-width: calc(50% - 12px); }
+            .tabs { justify-content: center; }
+            .value { font-size: 2rem; }
+            
+            /* Biểu đồ realtime*/
+            .rt-chart-box { padding: 12px; }
+            .rt-chart-box canvas { min-height: 200px; max-height: 240px; }
+            
+            /* Biểu đồ lịch sử */
+            .history-chart-card { padding: 12px; overflow-x: auto; }
+            .history-chart-card canvas { min-height: 220px; max-height: 260px; width: 100% !important; }
+            .full-width canvas { min-height: 250px; max-height: 300px; }
+            
+            .academic-footer { flex-direction: column; text-align: center; }
+            .footer-left { justify-content: center; }
+        }
+        
+        @media (max-width: 480px) {
+            .container { padding: 10px 12px; }
+            .value { font-size: 1.8rem; }
+            
+            /* Biểu đồ trên màn hình rất nhỏ */
+            .rt-chart-box canvas { min-height: 180px; max-height: 200px; }
+            .history-chart-card canvas { min-height: 200px; max-height: 240px; }
+            .full-width canvas { min-height: 220px; max-height: 260px; }
+            
+            .card, .glass-card, .system-card { padding: 20px; }
+            .tab-btn { padding: 6px 14px; font-size: 0.7rem; }
+            .history-chart-title { font-size: 0.65rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <div class="title-section">
+            <img class="logo-header" src="https://tapchikhoahoc.hvpnvn.edu.vn/images/vwa-logo.png" alt="VWA Logo" onerror="this.style.display='none'">
+            <div class="title-text">
+                <h1 id="app-title">VWA · IoT Environmental Monitor</h1>
+                <p id="app-subtitle"><i class="fas fa-microchip"></i> ESP32 | SHT41 | PMS7003 | Giám sát & Báo cáo thông minh</p>
+            </div>
+        </div>
+        <div class="status-clock">
+            <div id="sysStatus" class="system-status status-safe"><i class="fas fa-shield-alt"></i> <span id="status-text">HỆ THỐNG ỔN ĐỊNH</span></div>
+            <div id="time-display"><i class="far fa-clock"></i> --:--:--</div>
+            <div class="lang-selector">
+                <button class="lang-btn active" onclick="switchLanguage('vi')">🇻🇳 VI</button>
+                <button class="lang-btn" onclick="switchLanguage('en')">🇬🇧 EN</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('realtimeTab', this)"><i class="fas fa-tachometer-alt"></i> <span id="tab-realtime">BẢNG ĐIỀU KHIỂN</span></button>
+        <button class="tab-btn" onclick="switchTab('historyTab', this)"><i class="fas fa-chart-line"></i> <span id="tab-history">BÁO CÁO LỊCH SỬ</span></button>
+    </div>
+
+    <!-- TAB 1: REALTIME DASHBOARD -->
+    <div id="realtimeTab" class="tab-content active">
+        <div class="grid">
+            <div class="card">
+                <div class="metric-header"><span class="label"><i class="fas fa-thermometer-half"></i> <span id="temp-label">NHIỆT ĐỘ</span></span><i class="fas fa-temperature-high" style="color:#f57c00;"></i></div>
+                <div class="value" id="temp" style="color:#e65100;">--</div>
+                <div class="unit" id="temp-unit">°C · Cảm biến SHT41</div>
+            </div>
+            <div class="card">
+                <div class="metric-header"><span class="label"><i class="fas fa-tint"></i> <span id="hum-label">ĐỘ ẨM</span></span><i class="fas fa-water" style="color:#0288d1;"></i></div>
+                <div class="value" id="hum" style="color:#0288d1;">--</div>
+                <div class="unit" id="hum-unit">% · Độ ẩm không khí</div>
+            </div>
+            <div class="card">
+                <div class="metric-header"><span class="label"><i class="fas fa-smog"></i> <span id="pm-label">BỤI MỊN</span></span><i class="fas fa-microscope" style="color:#bf360c;"></i></div>
+                <div class="value" id="pm25" style="color:#bf360c;">--</div>
+                <div class="fan-card-content">
+                    <div class="unit" id="pm-unit">PM2.5 (µg/m³)</div>
+                    <div class="fan-icon-wrapper">
+                        <div><i id="dynamicFanIcon" class="fas fa-fan fan-icon"></i></div>
+                        <div id="fanStatusLabel" class="fan-status-text"><span id="fan-text">CHỜ</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="control-panels">
+            <div class="glass-card">
+                <h4><i class="fas fa-sliders-h"></i> <span id="threshold-title">CÀI ĐẶT NGƯỠNG</span></h4>
+                <div class="param-row">
+                    <div class="param-item"><label id="pm-thresh-label"><i class="fas fa-dust"></i> Ngưỡng PM2.5</label><input type="number" id="newThresh" placeholder="75" step="5"></div>
+                    <div class="param-item"><label id="delay-label"><i class="fas fa-hourglass-half"></i> Trì hoãn đóng (giây)</label><input type="number" id="newTimer" placeholder="20" step="5"></div>
+                </div>
+                <button onclick="saveConfig()"><i class="fas fa-save"></i> <span id="save-btn">LƯU CÀI ĐẶT</span></button>
+                <div style="margin-top: 12px; font-size: 0.75rem; text-align: center;"><span id="current-limit-text">Ngưỡng hiện tại:</span> <strong id="current-limit-display" style="color:#e65100;">--</strong> µg/m³</div>
+            </div>
+            <div class="glass-card">
+                <h4><i class="fas fa-door-open"></i> <span id="door-title">ĐIỀU KHIỂN CỬA</span></h4>
+                <div class="door-indicator" id="doorText"><i class="fas fa-door-closed"></i> <span id="door-state">CỬA: --</span></div>
+                <div class="btn-group">
+                    <button onclick="sendDoor('OPEN')"><i class="fas fa-unlock-alt"></i> <span id="open-btn">MỞ CỬA</span></button>
+                    <button onclick="sendDoor('CLOSE')"><i class="fas fa-lock"></i> <span id="close-btn">ĐÓNG CỬA</span></button>
+                </div>
+                <div id="countdown-box"><i class="fas fa-hourglass-start"></i> <span id="countdown-text">Không có hẹn giờ</span></div>
+            </div>
+            <div class="system-card">
+                <h4><i class="fas fa-microchip"></i> <span id="system-title">HỆ THỐNG</span></h4>
+                <div class="system-content">
+                    <button onclick="sendReset()" class="reboot-btn"><i class="fas fa-sync-alt"></i> <span id="reboot-btn">KHỞI ĐỘNG LẠI ESP32</span></button>
+                    <div class="sys-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span id="reset-warning">Reset toàn bộ vi điều khiển</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="realtime-charts">
+            <div class="rt-chart-box">
+                <div class="rt-chart-title"><i class="fas fa-chart-line" style="color:#bf360c;"></i> <span id="rt-pm-title">PM2.5 THEO THỜI GIAN THỰC</span></div>
+                <canvas id="rtPMChart"></canvas>
+            </div>
+            <div class="rt-chart-box">
+                <div class="rt-chart-title"><i class="fas fa-chart-line" style="color:#f57c00;"></i> <span id="rt-temp-title">NHIỆT ĐỘ THEO THỜI GIAN THỰC</span></div>
+                <canvas id="rtTempChart"></canvas>
+            </div>
+            <div class="rt-chart-box">
+                <div class="rt-chart-title"><i class="fas fa-chart-line" style="color:#0288d1;"></i> <span id="rt-hum-title">ĐỘ ẨM THEO THỜI GIAN THỰC</span></div>
+                <canvas id="rtHumChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 2: HISTORY REPORT -->
+    <div id="historyTab" class="tab-content">
+        <div class="filter-section">
+            <div class="filter-group">
+                <label id="from-date-label"><i class="fas fa-calendar-alt"></i> TỪ NGÀY</label>
+                <input type="datetime-local" id="startDate">
+            </div>
+            <div class="filter-group">
+                <label id="to-date-label"><i class="fas fa-calendar-alt"></i> ĐẾN NGÀY</label>
+                <input type="datetime-local" id="endDate">
+            </div>
+            <div class="filter-actions">
+                <button class="btn-filter" onclick="filterHistory()"><i class="fas fa-search"></i> <span id="search-btn">TRA CỨU</span></button>
+                <button class="btn-csv" onclick="exportCSV()"><i class="fas fa-file-excel"></i> <span id="export-btn">XUẤT CSV</span></button>
+            </div>
+        </div>
+
+        <div class="history-stats">
+            <div class="h-stat"><span id="total-records"><i class="fas fa-database"></i> TỔNG BẢN GHI</span><strong id="statCount">0</strong></div>
+            <div class="h-stat"><span id="avg-pm"><i class="fas fa-chart-line"></i> PM2.5 TB</span><strong id="statPM">0</strong> <span style="font-size:0.8rem;">µg/m³</span></div>
+            <div class="h-stat"><span id="avg-temp"><i class="fas fa-temperature-high"></i> NHIỆT ĐỘ TB</span><strong id="statTemp">0</strong> <span style="font-size:0.8rem;">°C</span></div>
+            <div class="h-stat"><span id="avg-hum"><i class="fas fa-tint"></i> ĐỘ ẨM TB</span><strong id="statHum">0</strong> <span style="font-size:0.8rem;">%</span></div>
+        </div>
+
+        <div class="history-grid">
+            <div class="history-chart-card">
+                <div class="history-chart-title" style="border-left-color: #26a69a;">
+                    <i class="fas fa-chart-pie" style="color:#26a69a;"></i> <span id="pie-title">TỈ LỆ CHẤT LƯỢNG KHÔNG KHÍ</span>
+                </div>
+                <canvas id="histPieChart"></canvas>
+            </div>
+            <div class="history-chart-card">
+                <div class="history-chart-title" style="border-left-color: #f57c00;">
+                    <i class="fas fa-chart-line" style="color:#f57c00;"></i> <span id="combo-title">TƯƠNG QUAN NHIỆT ĐỘ & ĐỘ ẨM</span>
+                </div>
+                <canvas id="histComboChart"></canvas>
+                <p style="margin-top: 12px; font-size: 0.7rem; color: #607d8b;"><i class="fas fa-info-circle"></i> <span id="combo-note">Cam: Nhiệt độ, Xanh: Độ ẩm</span></p>
+            </div>
+            <div class="history-chart-card full-width">
+                <div class="history-chart-title" style="border-left-color: #bf360c;">
+                    <i class="fas fa-chart-bar" style="color:#bf360c;"></i> <span id="bar-title">BIẾN ĐỘNG BỤI MỊN PM2.5 THEO GIỜ</span>
+                </div>
+                <canvas id="histPMChart_Hist"></canvas>
+                <p style="margin-top: 12px; font-size: 0.7rem; color: #607d8b;"><i class="fas fa-info-circle"></i> <span id="bar-note">Màu sắc: Vàng (Tốt <35), Cam (Cảnh báo 35-75), Đỏ (Nguy hiểm >75) | Di chuột vào cột để xem chi tiết ngày giờ</span></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="academic-footer">
+    <div class="footer-left">
+        <i class="fas fa-microchip"></i>
+        <span><strong id="footer-text">ITI - Học viện Phụ nữ Việt Nam</strong></span>
+        <div class="project-link">
+            <i class="fab fa-github"></i>
+            <a href="#" id="projectLinkPlaceholder" target="_blank">GitHub Repository</a>
+        </div>
+    </div>
+    <div class="footer-right">
+        <span><i class="far fa-copyright"></i> 2026 VWA</span>
+        <span><i class="fas fa-database"></i> Firebase Sync</span>
+    </div>
+</div>
+
+<script>
+    // ==================== NGÔN NGỮ ====================
+    const translations = {
+        vi: {
+            app_title: "VWA · IoT Environmental Monitor",
+            app_subtitle: "ESP32 | SHT41 | PMS7003 | Giám sát & Báo cáo thông minh",
+            status_stable: "HỆ THỐNG ỔN ĐỊNH",
+            status_alert: "CẢNH BÁO Ô NHIỄM",
+            tab_realtime: "BẢNG ĐIỀU KHIỂN",
+            tab_history: "BÁO CÁO LỊCH SỬ",
+            temp_label: "NHIỆT ĐỘ",
+            temp_unit: "°C · Cảm biến SHT41",
+            hum_label: "ĐỘ ẨM",
+            hum_unit: "% · Độ ẩm không khí",
+            pm_label: "BỤI MỊN",
+            pm_unit: "PM2.5 (µg/m³)",
+            fan_wait: "CHỜ",
+            fan_active: "LỌC KHÍ",
+            threshold_title: "CÀI ĐẶT NGƯỠNG",
+            pm_thresh_label: "Ngưỡng PM2.5",
+            delay_label: "Trì hoãn đóng (giây)",
+            save_btn: "LƯU CÀI ĐẶT",
+            current_limit_text: "Ngưỡng hiện tại:",
+            door_title: "ĐIỀU KHIỂN CỬA",
+            door_open: "CỬA: MỞ",
+            door_closed: "CỬA: ĐÓNG",
+            open_btn: "MỞ CỬA",
+            close_btn: "ĐÓNG CỬA",
+            countdown_text: "Không có hẹn giờ",
+            countdown_active: "Tự động đóng sau {s}s",
+            system_title: "HỆ THỐNG",
+            reboot_btn: "KHỞI ĐỘNG LẠI ESP32",
+            reset_warning: "Reset toàn bộ vi điều khiển",
+            rt_pm_title: "PM2.5 THEO THỜI GIAN THỰC",
+            rt_temp_title: "NHIỆT ĐỘ THEO THỜI GIAN THỰC",
+            rt_hum_title: "ĐỘ ẨM THEO THỜI GIAN THỰC",
+            from_date: "TỪ NGÀY",
+            to_date: "ĐẾN NGÀY",
+            search_btn: "TRA CỨU",
+            export_btn: "XUẤT CSV",
+            total_records: "TỔNG BẢN GHI",
+            avg_pm: "PM2.5 TB",
+            avg_temp: "NHIỆT ĐỘ TB",
+            avg_hum: "ĐỘ ẨM TB",
+            pie_title: "TỈ LỆ CHẤT LƯỢNG KHÔNG KHÍ",
+            combo_title: "TƯƠNG QUAN NHIỆT ĐỘ & ĐỘ ẨM",
+            combo_note: "Cam: Nhiệt độ, Xanh: Độ ẩm",
+            bar_title: "BIẾN ĐỘNG BỤI MỊN PM2.5 THEO GIỜ",
+            bar_note: "Màu sắc: Vàng (Tốt <35), Cam (Cảnh báo 35-75), Đỏ (Nguy hiểm >75) | Di chuột vào cột để xem chi tiết ngày giờ",
+            footer_text: "ITI - Học viện Phụ nữ Việt Nam"
+        },
+        en: {
+            app_title: "VWA · IoT Environmental Monitor",
+            app_subtitle: "ESP32 | SHT41 | PMS7003 | Smart Monitoring & Reporting",
+            status_stable: "SYSTEM STABLE",
+            status_alert: "AIR POLLUTION ALERT",
+            tab_realtime: "DASHBOARD",
+            tab_history: "HISTORY REPORT",
+            temp_label: "TEMPERATURE",
+            temp_unit: "°C · SHT41 sensor",
+            hum_label: "HUMIDITY",
+            hum_unit: "% · Ambient moisture",
+            pm_label: "PARTICULATE MATTER",
+            pm_unit: "PM2.5 (µg/m³)",
+            fan_wait: "STANDBY",
+            fan_active: "PURIFYING",
+            threshold_title: "ADAPTIVE THRESHOLDS",
+            pm_thresh_label: "PM2.5 Alert Limit",
+            delay_label: "Auto-close delay (sec)",
+            save_btn: "SAVE SETTINGS",
+            current_limit_text: "Current limit:",
+            door_title: "DOOR CONTROL",
+            door_open: "DOOR: OPEN",
+            door_closed: "DOOR: CLOSED",
+            open_btn: "OPEN DOOR",
+            close_btn: "CLOSE DOOR",
+            countdown_text: "No active timer",
+            countdown_active: "Auto-close in {s}s",
+            system_title: "SYSTEM",
+            reboot_btn: "REBOOT ESP32",
+            reset_warning: "Reset entire microcontroller",
+            rt_pm_title: "REAL-TIME PM2.5",
+            rt_temp_title: "REAL-TIME TEMPERATURE",
+            rt_hum_title: "REAL-TIME HUMIDITY",
+            from_date: "FROM DATE",
+            to_date: "TO DATE",
+            search_btn: "SEARCH",
+            export_btn: "EXPORT CSV",
+            total_records: "TOTAL RECORDS",
+            avg_pm: "AVG PM2.5",
+            avg_temp: "AVG TEMP",
+            avg_hum: "AVG HUMIDITY",
+            pie_title: "AIR QUALITY RATIO",
+            combo_title: "TEMP & HUMIDITY CORRELATION",
+            combo_note: "Orange: Temperature, Blue: Humidity",
+            bar_title: "PM2.5 HOURLY VARIATION",
+            bar_note: "Colors: Yellow (Good <35), Orange (Moderate 35-75), Red (Hazardous >75) | Hover for details",
+            footer_text: "ITI - Vietnam Women's Academy"
+        }
+    };
+    
+    let currentLang = localStorage.getItem('language') || 'vi';
+    
+    function switchLanguage(lang) {
+        currentLang = lang;
+        localStorage.setItem('language', lang);
+        
+        document.querySelectorAll('.lang-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if ((lang === 'vi' && btn.innerText.includes('VI')) || (lang === 'en' && btn.innerText.includes('EN'))) {
+                btn.classList.add('active');
+            }
+        });
+        
+        const t = translations[lang];
+        
+        document.getElementById('app-title').innerText = t.app_title;
+        document.getElementById('app-subtitle').innerHTML = `<i class="fas fa-microchip"></i> ${t.app_subtitle}`; 
+        
+        document.getElementById('tab-realtime').innerText = t.tab_realtime;
+        document.getElementById('tab-history').innerText = t.tab_history;
+        document.getElementById('temp-label').innerText = t.temp_label;
+        document.getElementById('temp-unit').innerText = t.temp_unit; 
+        document.getElementById('hum-label').innerText = t.hum_label;
+        document.getElementById('hum-unit').innerText = t.hum_unit;
+        document.getElementById('pm-label').innerText = t.pm_label;
+        document.getElementById('pm-unit').innerText = t.pm_unit;
+        
+        document.getElementById('threshold-title').innerText = t.threshold_title; 
+        document.getElementById('pm-thresh-label').innerHTML = `<i class="fas fa-dust"></i> ${t.pm_thresh_label}`;
+        document.getElementById('delay-label').innerHTML = `<i class="fas fa-hourglass-half"></i> ${t.delay_label}`;
+        document.getElementById('save-btn').innerText = t.save_btn; // Chỉ đổi chữ
+        document.getElementById('current-limit-text').innerText = t.current_limit_text;
+        
+        document.getElementById('door-title').innerText = t.door_title;
+        document.getElementById('open-btn').innerText = t.open_btn;
+        document.getElementById('close-btn').innerText = t.close_btn;
+        document.getElementById('system-title').innerText = t.system_title;
+        document.getElementById('reboot-btn').innerText = t.reboot_btn;
+        document.getElementById('reset-warning').innerText = t.reset_warning;
+        
+        document.getElementById('rt-pm-title').innerText = t.rt_pm_title;
+        document.getElementById('rt-temp-title').innerText = t.rt_temp_title;
+        document.getElementById('rt-hum-title').innerText = t.rt_hum_title;
+        
+        document.getElementById('from-date-label').innerHTML = `<i class="fas fa-calendar-alt"></i> ${t.from_date}`;
+        document.getElementById('to-date-label').innerHTML = `<i class="fas fa-calendar-alt"></i> ${t.to_date}`;
+        document.getElementById('search-btn').innerText = t.search_btn;
+        document.getElementById('export-btn').innerText = t.export_btn;
+        
+        document.getElementById('total-records').innerHTML = `<i class="fas fa-database"></i> ${t.total_records}`;
+        document.getElementById('avg-pm').innerHTML = `<i class="fas fa-chart-line"></i> ${t.avg_pm}`;
+        document.getElementById('avg-temp').innerHTML = `<i class="fas fa-temperature-high"></i> ${t.avg_temp}`;
+        document.getElementById('avg-hum').innerHTML = `<i class="fas fa-tint"></i> ${t.avg_hum}`;
+        
+        document.getElementById('pie-title').innerText = t.pie_title;
+        document.getElementById('combo-title').innerText = t.combo_title;
+        document.getElementById('combo-note').innerText = t.combo_note;
+        document.getElementById('bar-title').innerText = t.bar_title;
+        document.getElementById('bar-note').innerText = t.bar_note;
+        document.getElementById('footer-text').innerText = t.footer_text;
+        
+        // Cập nhật door text và status nếu có
+        if (currentDoor === "OPEN") {
+            doorTextSpan.innerHTML = `<i class="fas fa-door-open" style="color:#26a69a;"></i> ${t.door_open}`;
+        } else {
+            doorTextSpan.innerHTML = `<i class="fas fa-door-closed" style="color:#ef5350;"></i> ${t.door_closed}`;
+        }
+        
+        if (currentPM > dustThreshold) {
+            sysStatusDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${t.status_alert}`;
+        } else {
+            sysStatusDiv.innerHTML = `<i class="fas fa-check-circle"></i> ${t.status_stable}`;
+        }
+        
+        if (remainingTime > 0) {
+            countdownBox.innerHTML = `<i class="fas fa-hourglass-half"></i> ${t.countdown_active.replace('{s}', remainingTime)}`;
+        } else {
+            countdownBox.innerHTML = `<i class="fas fa-shield-alt"></i> ${t.countdown_text}`;
+        }
+        
+        if (fanState || currentPM > dustThreshold) {
+            fanStatusLabel.innerHTML = `<i class="fas fa-water"></i> ${t.fan_active}`;
+        } else {
+            fanStatusLabel.innerHTML = `<i class="fas fa-check-circle"></i> ${t.fan_wait}`;
+        }
+    }
+
+    // ==================== FIREBASE ====================
+    const firebaseConfig = {
+        apiKey: "AIzaSyDKCEfbm7jp6ChIQFsjH71aP1kE0gkcgA8",
+        authDomain: "iot-environmental-acd0a.firebaseapp.com",
+        databaseURL: "https://iot-environmental-acd0a-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "iot-environmental-acd0a",
+        storageBucket: "iot-environmental-acd0a.firebasestorage.app",
+        messagingSenderId: "164744074084",
+        appId: "1:164744074084:web:54849feeb24cf81b8ca071"
+    };
+    let realtimeDb = null;
+    try { firebase.initializeApp(firebaseConfig); realtimeDb = firebase.database(); } catch(e) { console.warn(e); }
+
+    // ==================== TABS ====================
+    function switchTab(tabId, btn) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        btn.classList.add('active');
+        if(tabId === 'historyTab') {
+            if(!document.getElementById("startDate").value) {
+                let now = new Date();
+                let tzOffset = now.getTimezoneOffset() * 60000; 
+                let localISOTime = (new Date(now.getTime() - tzOffset)).toISOString().slice(0,16);
+                let yesterday = new Date(now.getTime() - (24 * 60 * 60 * 1000) - tzOffset).toISOString().slice(0,16);
+                document.getElementById("startDate").value = yesterday;
+                document.getElementById("endDate").value = localISOTime;
+            }
+            filterHistory();
+        }
+    }
+
+    // ==================== REALTIME CHARTS ====================
+    let rtTempChart, rtHumChart, rtPMChart;
+    function initRealTimeCharts() {
+        const tooltipOpts = { mode: 'index', intersect: false, callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.raw}` } };
+        const commonOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: tooltipOpts }, scales: { x: { ticks: { maxRotation: 40, autoSkip: true, maxTicksLimit: 6 } } } };
+        
+        rtPMChart = new Chart(document.getElementById('rtPMChart'), { 
+            type: 'line', data: { labels: [], datasets: [{ label: 'PM2.5 (µg/m³)', data: [], borderColor: '#bf360c', backgroundColor: '#fff3e0', fill: true, tension: 0.3, pointRadius: 0 }] }, 
+            options: { ...commonOpts, scales: { ...commonOpts.scales, y: { beginAtZero: true } } } 
+        });
+        rtTempChart = new Chart(document.getElementById('rtTempChart'), { 
+            type: 'line', data: { labels: [], datasets: [{ label: 'Nhiệt độ (°C)', data: [], borderColor: '#f57c00', backgroundColor: '#fff8e1', fill: true, tension: 0.3, pointRadius: 0 }] }, 
+            options: { ...commonOpts, scales: { ...commonOpts.scales, y: { suggestedMin: 15, suggestedMax: 40 } } } 
+        });
+        rtHumChart = new Chart(document.getElementById('rtHumChart'), { 
+            type: 'line', data: { labels: [], datasets: [{ label: 'Độ ẩm (%)', data: [], borderColor: '#0288d1', backgroundColor: '#e1f5fe', fill: true, tension: 0.3, pointRadius: 0 }] }, 
+            options: { ...commonOpts, scales: { ...commonOpts.scales, y: { suggestedMin: 20, suggestedMax: 90 } } } 
+        });
+    }
+    function updateRealTimeCharts(temp, hum, pm) {
+        const time = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const upd = (chart, val) => { chart.data.labels.push(time); chart.data.datasets[0].data.push(val); if(chart.data.labels.length > 20) { chart.data.labels.shift(); chart.data.datasets[0].data.shift(); } chart.update('none'); };
+        upd(rtTempChart, temp); upd(rtHumChart, hum); upd(rtPMChart, pm);
+    }
+
+    // ==================== REALTIME LOGIC ====================
+    let dustThreshold = 75, autoCloseTimerSec = 20;
+    let currentPM = 0, currentTemp = 0, currentHum = 0, currentDoor = "CLOSED", remainingTime = 0, fanState = false;
+    const tempEl = document.getElementById("temp"), humEl = document.getElementById("hum"), pmEl = document.getElementById("pm25");
+    const sysStatusDiv = document.getElementById("sysStatus"), fanIcon = document.getElementById("dynamicFanIcon");
+    const fanStatusLabel = document.getElementById("fanStatusLabel"), doorTextSpan = document.getElementById("doorText");
+    const countdownBox = document.getElementById("countdown-box"), currentLimitDisplay = document.getElementById("current-limit-display");
+
+    function renderDashboard(data) {
+        if(!data) return;
+        currentTemp = data.temp || 0;
+        currentHum = data.hum || 0;
+        currentPM = data.pm25 || 0;
+        currentDoor = data.door || "CLOSED";
+        remainingTime = data.remaining || 0;
+        fanState = data.fan === "ON";
+        
+        tempEl.innerText = currentTemp.toFixed(1);
+        humEl.innerText = Math.round(currentHum);
+        pmEl.innerText = Math.round(currentPM);
+        currentLimitDisplay.innerText = dustThreshold;
+        updateRealTimeCharts(currentTemp, currentHum, currentPM);
+        
+        let isDanger = (currentPM > dustThreshold);
+        const t = translations[currentLang];
+        sysStatusDiv.className = isDanger ? "system-status status-danger" : "system-status status-safe";
+        sysStatusDiv.innerHTML = isDanger ? `<i class="fas fa-exclamation-triangle"></i> ${t.status_alert}` : `<i class="fas fa-check-circle"></i> ${t.status_stable}`;
+        
+        if (currentDoor === "OPEN") {
+            doorTextSpan.innerHTML = `<i class="fas fa-door-open" style="color:#26a69a;"></i> ${t.door_open}`;
+        } else {
+            doorTextSpan.innerHTML = `<i class="fas fa-door-closed" style="color:#ef5350;"></i> ${t.door_closed}`;
+        }
+        
+        if (remainingTime > 0) {
+            countdownBox.innerHTML = `<i class="fas fa-hourglass-half"></i> ${t.countdown_active.replace('{s}', remainingTime)}`;
+        } else {
+            countdownBox.innerHTML = `<i class="fas fa-shield-alt"></i> ${t.countdown_text}`;
+        }
+        
+        if(isDanger || fanState) { 
+            fanIcon.classList.add("fan-spinning"); 
+            fanStatusLabel.innerHTML = `<i class="fas fa-water"></i> ${t.fan_active}`;
+            fanStatusLabel.style.color = "#0277bd"; 
+        } else { 
+            fanIcon.classList.remove("fan-spinning"); 
+            fanStatusLabel.innerHTML = `<i class="fas fa-check-circle"></i> ${t.fan_wait}`;
+            fanStatusLabel.style.color = "#607d8b"; 
+        }
+    }
+
+    if(realtimeDb) {
+        realtimeDb.ref("Settings").on("value", snap => { if(snap.val()) { dustThreshold = snap.val().threshold || 75; autoCloseTimerSec = snap.val().auto_close_time || 20; document.getElementById("newThresh").placeholder = dustThreshold; document.getElementById("newTimer").placeholder = autoCloseTimerSec; renderDashboard({}); } });
+        realtimeDb.ref("Environment/Latest").on("value", snap => renderDashboard(snap.val()));
+    }
+
+    window.sendDoor = state => { if(realtimeDb) realtimeDb.ref("Settings").update({ door: state }); };
+    window.saveConfig = () => { let th = document.getElementById("newThresh").value, ti = document.getElementById("newTimer").value; let up = {}; if(th) up.threshold = parseInt(th); if(ti) up.auto_close_time = parseInt(ti); if(realtimeDb && Object.keys(up).length) realtimeDb.ref("Settings").update(up); document.getElementById("newThresh").value = ''; document.getElementById("newTimer").value = ''; };
+    window.sendReset = () => { if(confirm("⚠️ Xác nhận khởi động lại hệ thống ESP32?")) { if(realtimeDb) realtimeDb.ref("Settings").update({ command: "RESET", timestamp: Date.now() }); alert("✅ Đã gửi lệnh khởi động lại!"); } };
+
+    // ==================== HISTORY LOGIC ====================
+    let histPieChart = null, histComboChart = null, histPMChart_Hist = null;
+    let exportData = [];
+    let hourlyLabelsData = [];
+
+    function filterHistory() {
+        let start = document.getElementById("startDate").value, end = document.getElementById("endDate").value;
+        
+        if(!start || !end) return alert(currentLang === 'vi' ? "Vui lòng chọn khoảng thời gian!" : "Please select a time range!");
+        
+        let btn = document.querySelector('.btn-filter');
+        btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> <span id="search-btn">${currentLang === 'vi' ? 'ĐANG TẢI...' : 'LOADING...'}</span>`; 
+        btn.style.opacity = '0.7';
+        
+        let startTimestamp = new Date(start).getTime() / 1000, endTimestamp = new Date(end).getTime() / 1000;
+        if(realtimeDb) realtimeDb.ref("Environment/History").orderByChild("timestamp").startAt(startTimestamp).endAt(endTimestamp).once("value", snapshot => processHistoryData(snapshot.val()));
+    }
+
+    function processHistoryData(data) {
+        let btn = document.querySelector('.btn-filter');
+        btn.innerHTML = `<i class="fas fa-search"></i> <span id="search-btn">${translations[currentLang].search_btn}</span>`; 
+        btn.style.opacity = '1';
+        
+        exportData = [];
+        if(!data) { updateHistoryCharts([], [], [], []); return; }
+        
+        let rawItems = [];
+        for(let key in data) { let row = data[key]; row.firebaseID = key; rawItems.push(row); }
+        rawItems.sort((a,b) => a.timestamp - b.timestamp);
+        
+        let hourlyMap = {};
+        rawItems.forEach(item => {
+            let date = new Date(item.timestamp * 1000);
+            let hourKey = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:00`;
+            if (!hourlyMap[hourKey]) hourlyMap[hourKey] = { sumTemp: 0, sumHum: 0, sumPM: 0, count: 0, fullDate: date };
+            hourlyMap[hourKey].sumTemp += item.temp;
+            hourlyMap[hourKey].sumHum += item.hum;
+            hourlyMap[hourKey].sumPM += item.pm25;
+            hourlyMap[hourKey].count++;
+            
+            let t = n => String(n).padStart(2, '0');
+            let timeCSV = `${date.getFullYear()}-${t(date.getMonth()+1)}-${t(date.getDate())} ${t(date.getHours())}:${t(date.getMinutes())}:${t(date.getSeconds())}`;
+            exportData.push({ id: item.firebaseID, time: timeCSV, temp: item.temp, hum: item.hum, pm25: item.pm25, limit: item.limit !== undefined ? item.limit : 75, door: item.door || "Unknown" });
+        });
+        
+        let labels = [], avgPM = [], avgTemp = [], avgHum = [];
+        let totalSumPM = 0, totalSumTemp = 0, totalSumHum = 0, totalCount = 0;
+        let lastDate = "";
+        
+        Object.keys(hourlyMap).sort().forEach(hour => {
+            let bucket = hourlyMap[hour];
+            let aPM = Math.round(bucket.sumPM / bucket.count);
+            let aTemp = parseFloat((bucket.sumTemp / bucket.count).toFixed(1));
+            let aHum = Math.round(bucket.sumHum / bucket.count);
+            let d = bucket.fullDate;
+            
+            let hourStr = String(d.getHours()).padStart(2,'0');
+            let dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+            let displayLabel;
+            
+            if (lastDate !== dateStr) {
+                displayLabel = `${hourStr}:00\n${dateStr}`;
+                lastDate = dateStr;
+            } else {
+                displayLabel = `${hourStr}:00`;
+            }
+            
+            hourlyLabelsData.push({
+                label: displayLabel,
+                fullDate: d,
+                hour: hourStr,
+                dateStr: dateStr,
+                fullDateTime: `${dateStr} ${hourStr}:00`
+            });
+            
+            labels.push(displayLabel);
+            avgPM.push(aPM);
+            avgTemp.push(aTemp);
+            avgHum.push(aHum);
+            totalSumPM += bucket.sumPM;
+            totalSumTemp += bucket.sumTemp;
+            totalSumHum += bucket.sumHum;
+            totalCount += bucket.count;
+        });
+        
+        document.getElementById("statCount").innerText = rawItems.length;
+        document.getElementById("statPM").innerText = totalCount > 0 ? Math.round(totalSumPM / totalCount) : 0;
+        document.getElementById("statTemp").innerText = totalCount > 0 ? (totalSumTemp / totalCount).toFixed(1) : "0";
+        document.getElementById("statHum").innerText = totalCount > 0 ? Math.round(totalSumHum / totalCount) : 0;
+        
+        updateHistoryCharts(labels, avgPM, avgTemp, avgHum);
+    }
+
+    function updateHistoryCharts(labels, pmVals, tempVals, humVals) {
+        if(histPieChart) histPieChart.destroy();
+        if(histComboChart) histComboChart.destroy();
+        if(histPMChart_Hist) histPMChart_Hist.destroy();
+        if(labels.length === 0) return;
+        
+        let good = 0, mod = 0, bad = 0;
+        pmVals.forEach(v => { if(v < 35) good++; else if(v <= 75) mod++; else bad++; });
+        histPieChart = new Chart(document.getElementById('histPieChart'), {
+            type: 'doughnut',
+            data: { labels: ['Tốt (<35 µg/m³)', 'Cảnh báo (35-75 µg/m³)', 'Nguy hiểm (>75 µg/m³)'], datasets: [{ data: [good, mod, bad], backgroundColor: ['#26a69a', '#ffa726', '#ef5350'], borderWidth: 0 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, cutout: '65%' }
+        });
+        
+        histComboChart = new Chart(document.getElementById('histComboChart'), {
+            type: 'line',
+            data: { labels: labels, datasets: [
+                { label: 'Nhiệt độ TB (°C)', data: tempVals, borderColor: '#f57c00', backgroundColor: '#fff8e1', borderWidth: 2.5, tension: 0.3, fill: true, pointRadius: 0, yAxisID: 'yTemp' },
+                { label: 'Độ ẩm TB (%)', data: humVals, borderColor: '#0288d1', backgroundColor: '#e1f5fe', borderWidth: 2.5, tension: 0.3, fill: true, pointRadius: 0, yAxisID: 'yHum' }
+            ] },
+            options: { 
+                responsive: true, maintainAspectRatio: false, 
+                plugins: { tooltip: { mode: 'index', intersect: false, callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.raw}` } } }, 
+                scales: { 
+                    x: { ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 8 } }, 
+                    yTemp: { type: 'linear', position: 'left', title: { display: true, text: 'Nhiệt độ (°C)' }, suggestedMin: 15, suggestedMax: 40, grid: { color: '#e0f2f1' } }, 
+                    yHum: { type: 'linear', position: 'right', title: { display: true, text: 'Độ ẩm (%)' }, suggestedMin: 20, suggestedMax: 100, grid: { display: false } } 
+                } 
+            }
+        });
+        
+        let pmColors = pmVals.map(v => v >= 75 ? '#ef5350' : (v >= 35 ? '#ffa726' : '#ffee58'));
+        histPMChart_Hist = new Chart(document.getElementById('histPMChart_Hist'), {
+            type: 'bar',
+            data: { labels: labels, datasets: [{ label: 'PM2.5 (µg/m³)', data: pmVals, backgroundColor: pmColors, borderRadius: 6, barPercentage: 0.7, categoryPercentage: 0.8 }] },
+            options: { 
+                responsive: true, maintainAspectRatio: false, 
+                plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => { let idx = ctx.dataIndex; let fullInfo = hourlyLabelsData[idx]; let dateStr = fullInfo ? fullInfo.fullDateTime : labels[idx]; return `${dateStr}: ${ctx.raw} µg/m³`; } } } }, 
+                scales: { x: { ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 10, font: { size: 10 } }, grid: { display: false } }, y: { beginAtZero: true, title: { display: true, text: 'PM2.5 (µg/m³)' }, suggestedMax: 100 } } 
+            }
+        });
+    }
+
+    window.exportCSV = function() {
+        if(exportData.length === 0) return alert("Không có dữ liệu để xuất!");
+        let csv = "\uFEFFFirebase_ID,DateTime,Temp(°C),Humi(%),PM25(µg/m³),Limit(µg/m³),Servo_Status\n";
+        exportData.forEach(row => { csv += `${row.id},${row.time},${row.temp},${row.hum},${row.pm25},${row.limit},${row.door}\n`; });
+        let link = document.createElement("a"); link.href = encodeURI("data:text/csv;charset=utf-8," + csv);
+        link.download = `Environmental_Report_${new Date().toISOString().slice(0,19)}.csv`; link.click();
+    };
+
+    document.getElementById("projectLinkPlaceholder").href = "https://github.com/redpear21/env-monitor-system";
+
+    // ==================== INIT ====================
+    initRealTimeCharts();
+    setInterval(() => {
+        let now = new Date();
+        document.getElementById("time-display").innerHTML = `<i class="far fa-calendar-alt"></i> ${now.toLocaleTimeString('vi-VN')} - ${now.toLocaleDateString('vi-VN')}`;
+    }, 1000);
+    renderDashboard({ temp: 23.5, hum: 62, pm25: 28, door: "CLOSED", remaining: 0, fan: "OFF" });
+    switchLanguage(currentLang);
+</script>
+</body>
+</html>
+)====";
+#endif
